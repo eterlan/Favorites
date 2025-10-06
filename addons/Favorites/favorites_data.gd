@@ -22,42 +22,124 @@ func set_debug_enabled(enabled: bool):
 	debug_enabled = enabled
 	debug_print("Debug mode " + ("enabled" if enabled else "disabled"))
 
-func add_favorite(favorite: Dictionary):
+func add_favorite(favorite: Dictionary) -> bool:
 	# Check if the same favorite item already exists
-	for existing in favorites:
-		if existing.path == favorite.path and existing.get("node_path", "") == favorite.get("node_path", ""):
-			debug_print("Item already exists: " + favorite.name)
-			return
+	if is_favorited(favorite):
+		debug_print("Item already exists: " + favorite.name)
+		return false
 	
 	favorites.append(favorite)
 	save_favorites()
 	debug_print("Added favorite: " + favorite.name)
+	return true
 
-func remove_favorite(favorite: Dictionary):
-	for i in range(favorites.size()):
-		var existing = favorites[i]
-		if existing.path == favorite.path and existing.get("node_path", "") == favorite.get("node_path", ""):
-			favorites.remove_at(i)
-			save_favorites()
-			debug_print("Removed favorite: " + favorite.name)
-			return
+func remove_favorite(index: int):
+	if index >= 0 and index < favorites.size():
+		var favorite = favorites[index]
+		favorites.remove_at(index)
+		save_favorites()
+		debug_print("Removed favorite: " + favorite.name)
 
 func get_favorites() -> Array:
 	return favorites
 
+func get_favorite_by_index(index: int) -> Dictionary:
+	if index >= 0 and index < favorites.size():
+		return favorites[index]
+	return {}
+
+# Check if two favorites are the same (unified comparison logic)
+func _favorites_match(fav1: Dictionary, fav2: Dictionary) -> bool:
+	return fav1.path == fav2.path and fav1.get("node_path", "") == fav2.get("node_path", "")
+
 # Check if already favorited
-func is_favorited(path: String, node_path: String = "") -> bool:
-	for existing in favorites:
-		if existing.path == path and existing.get("node_path", "") == node_path:
-			return true
+func is_favorited(favorite: Dictionary) -> bool:
+	return find_favorite_index(favorite) != -1
+
+# Overloaded version for path-based check
+func is_favorited_by_path(path: String, node_path: String = "") -> bool:
+	var temp_favorite = {"path": path, "node_path": node_path}
+	return is_favorited(temp_favorite)
+
+func find_favorite_index_by_path(path: String, node_path: String = "") -> int:
+	var temp_favorite = {"path": path, "node_path": node_path}
+	return find_favorite_index(temp_favorite)
+
+# Find favorite index by favorite object
+func find_favorite_index(favorite: Dictionary) -> int:
+	for i in range(favorites.size()):
+		if _favorites_match(favorites[i], favorite):
+			return i
+	return -1
+
+# Calculate path relative to scene root node
+func get_node_path(node: Node) -> String:
+	var scene_root = EditorInterface.get_edited_scene_root()
+	var node_path = str(scene_root.get_path_to(node))
+	return node_path
+
+# Create a favorite dictionary from a node (unified node processing logic)
+func create_favorite_from_node(node: Node) -> Dictionary:
+	var scene_root = EditorInterface.get_edited_scene_root()
+	var scene_path = scene_root.scene_file_path if scene_root else ""
+	
+	# If node has its own scene file path, use it; otherwise use current edited scene path
+	if node.scene_file_path != "":
+		scene_path = node.scene_file_path
+	
+	return {
+		"name": node.name + " (" + scene_path.get_file() + ")",
+		"type": "node",
+		"path": scene_path,
+		"node_path": get_node_path(node)
+	}
+
+# Create a favorite dictionary from a file path (unified file processing logic)
+func create_favorite_from_file(file_path: String) -> Dictionary:
+	# Check if it's a folder
+	var is_directory = DirAccess.dir_exists_absolute(file_path)
+	debug_print("Creating favorite from file: " + file_path)
+	
+	var entry_name: String
+	if is_directory:
+		var slice_count = file_path.get_slice_count("/")
+		debug_print("Directory slice count: " + str(slice_count))
+		var splits = file_path.rsplit("/", false, 1)
+		entry_name = splits[1]
+	else:
+		entry_name = file_path.get_file()
+	
+	return {
+		"name": entry_name,
+		"type": "folder" if is_directory else "file", 
+		"path": file_path
+	}
+
+# Move favorite item up in the list
+func move_favorite_up(favorite: Dictionary) -> bool:
+	var index = favorites.find(favorite)
+	if index > 0:
+		# Swap with previous item
+		var temp = favorites[index - 1]
+		favorites[index - 1] = favorites[index]
+		favorites[index] = temp
+		save_favorites()
+		debug_print("Moved favorite up: " + favorite.name)
+		return true
 	return false
 
-# Find favorite item by path
-func find_favorite(path: String, node_path: String = "") -> Dictionary:
-	for existing in favorites:
-		if existing.path == path and existing.get("node_path", "") == node_path:
-			return existing
-	return {}
+# Move favorite item down in the list
+func move_favorite_down(favorite: Dictionary) -> bool:
+	var index = favorites.find(favorite)
+	if index >= 0 and index < favorites.size() - 1:
+		# Swap with next item
+		var temp = favorites[index + 1]
+		favorites[index + 1] = favorites[index]
+		favorites[index] = temp
+		save_favorites()
+		debug_print("Moved favorite down: " + favorite.name)
+		return true
+	return false
 
 # Settings management
 func get_setting(key: String, default_value = null):

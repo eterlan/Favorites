@@ -1,7 +1,12 @@
 @tool
+class_name FavoritesPanel
 extends Control
 
 const FavoritesData = preload("res://addons/favorites/favorites_data.gd")
+
+const FILE_SYSTEM: StringName = "FileSystem"
+const SCENE: StringName = "Scene"
+const SCRIPT_EDITOR: StringName = "ScriptEditor"
 
 var favorites_data: FavoritesData
 var tree: Tree
@@ -14,7 +19,9 @@ var all_favorites: Array = []
 
 var is_focused_file_system: bool = false
 var is_focused_scene_tree_editor: bool = false
-var last_focused_file_system: bool = false
+var is_focused_script_editor: bool = false
+var last_focused_editor: String = ""
+
 var file_system_dock: FileSystemDock
 var file_system_tree: Tree
 var main_window: Window
@@ -42,12 +49,18 @@ func _exit_tree() -> void:
 
 # SceneTreeDock
 func _on_main_window_gui_focus_changed(_control: Control):
-	is_focused_file_system = _control.get_node("../..").name == &"FileSystem"
-	is_focused_scene_tree_editor = _control.get_node("../..").name == &"Scene"
+	is_focused_file_system = _control.get_node("../..").name == FILE_SYSTEM
 	if is_focused_file_system:
-		last_focused_file_system = true
-	elif is_focused_scene_tree_editor:
-		last_focused_file_system = false
+		last_focused_editor = FILE_SYSTEM
+		return
+	is_focused_scene_tree_editor = _control.get_node("../..").name == SCENE
+	if is_focused_scene_tree_editor:
+		last_focused_editor = SCENE
+		return
+	is_focused_script_editor = is_instance_of(_control, CodeEdit)
+	if is_focused_script_editor:
+		last_focused_editor = SCRIPT_EDITOR
+		return
 
 func _create_ui():
 	# Create vertical layout
@@ -97,6 +110,8 @@ func _create_ui():
 	tree = Tree.new()
 	tree.allow_rmb_select = true
 	tree.set_hide_root(true)
+	# Enable drag and drop
+	tree.set_drag_forwarding(_get_drag_data, _can_drop_data, _drop_data)
 	tree.item_selected.connect(_on_item_selected)
 	tree.item_activated.connect(_on_item_activated)
 	tree.item_mouse_selected.connect(_on_item_mouse_selected)
@@ -109,14 +124,24 @@ func _create_ui():
 	shortcut_context = tree
 
 func _input(event: InputEvent):
-	# Handle Cmd+Delete (macOS) or Ctrl+Delete (Windows/Linux) shortcut
+	# Handle keyboard shortcuts
 	if event as InputEventKey and event.is_pressed():
 		var input_event_key = event as InputEventKey
 		var is_cmd_or_ctrl = input_event_key.is_command_or_control_pressed()
-		if is_cmd_or_ctrl and input_event_key.keycode == KEY_BACKSPACE:
-			# Check if there's a selected item and favorites panel has focus
-			if tree.get_selected() and (has_focus() or tree.has_focus()):
+		
+		# Check if favorites panel has focus
+		if tree.get_selected() and (has_focus() or tree.has_focus()):
+			if is_cmd_or_ctrl and input_event_key.keycode == KEY_BACKSPACE:
+				# Cmd+Delete (macOS) or Ctrl+Delete (Windows/Linux) - Remove
 				_on_remove_pressed()
+				get_viewport().set_input_as_handled()
+			elif is_cmd_or_ctrl and input_event_key.keycode == KEY_UP:
+				# Ctrl+Up Arrow - Move up
+				_move_favorite_up()
+				get_viewport().set_input_as_handled()
+			elif is_cmd_or_ctrl and input_event_key.keycode == KEY_DOWN:
+				# Ctrl+Down Arrow - Move down
+				_move_favorite_down()
 				get_viewport().set_input_as_handled()
 
 func _refresh_tree():
@@ -179,78 +204,55 @@ func _set_file_icon(item: TreeItem, file_path: String):
 
 func _on_add_current_pressed():
 	# First check if file system window has selected files
-	if last_focused_file_system:
-		var selected_paths = EditorInterface.get_selected_paths()
-		favorites_data.debug_print("Selected paths: " + str(selected_paths))
-		if selected_paths.size() > 0:
-			# File system has selected files, prioritize adding these files
-			for path in selected_paths:
-				favorites_data.debug_print("Processing path: " + path)
-				if FileAccess.file_exists(path):  # Ensure it's a file, not a directory
-					_add_file_to_favorites(path)
-			return
-	
-	# If file system has no selected files, check scene tree node selection
-	var selection = EditorInterface.get_selection()
-	var selected_nodes = selection.get_selected_nodes()
-	
-	if selected_nodes.size() > 0:
-		# Add selected nodes
-		for node in selected_nodes:
-			_add_node_to_favorites(node)
-		return
-	
-	# Finally try to add currently edited script
-	var current_script = EditorInterface.get_script_editor().get_current_script()
-	if current_script:
-		_add_file_to_favorites(current_script.resource_path)
 
-func _add_node_to_favorites(node: Node):
-	var scene_root = EditorInterface.get_edited_scene_root()
-	var scene_path = scene_root.scene_file_path if scene_root else ""
-	
-	# If node has its own scene file path, use it; otherwise use current edited scene path
-	if node.scene_file_path != "":
-		scene_path = node.scene_file_path
-	
-	# Calculate path relative to scene root node
-	var node_path: String
-	if scene_root and node != scene_root:
-		node_path = str(scene_root.get_path_to(node))
-	else:
-		# If node is the scene root node
-		node_path = "."
-	
-	var favorite = {
-		"name": node.name + " (" + scene_path.get_file() + ")",
-		"type": "node",
-		"path": scene_path,
-		"node_path": node_path
-	}
-	
-	favorites_data.add_favorite(favorite)
-	_refresh_tree()
+	match last_focused_editor:
+		FILE_SYSTEM:
+			var selected_paths = EditorInterface.get_selected_paths()
+			favorites_data.debug_print("Selected paths: " + str(selected_paths))
+			if selected_paths.size() > 0:
+				# File system has selected files, prioritize adding these files
+				for path in selected_paths:
+					favorites_data.debug_print("Processing path: " + path)
+					if FileAccess.file_exists(path):  # Ensure it's a file, not a directory
+						add_file_to_favorites(path)
 
-func _add_file_to_favorites(file_path: String):
-	# Check if it's a folder
-	var is_directory = DirAccess.dir_exists_absolute(file_path)
-	favorites_data.debug_print("Adding file to favorites: " + file_path)
-	var entry_name: String
-	if is_directory:
-		var slice_count = file_path.get_slice_count("/")
-		favorites_data.debug_print("Directory slice count: " + str(slice_count))
-		var splits = file_path.rsplit("/", false, 1)
-		entry_name = splits[1]
-	else:
-		entry_name = file_path.get_file()
+		SCENE:
+			var selection = EditorInterface.get_selection()
+			var selected_nodes = selection.get_selected_nodes()
+			
+			if selected_nodes.size() > 0:
+				# Add selected nodes
+				for node in selected_nodes:
+					add_node_to_favorites(node)
+
+		SCRIPT_EDITOR:
+			var current_script = EditorInterface.get_script_editor().get_current_script()
+			if current_script:
+				add_file_to_favorites(current_script.resource_path)
+
+
+func add_node_to_favorites(node: Node):
+	var favorite = favorites_data.create_favorite_from_node(node)
+	var index = favorites_data.find_favorite_index(favorite)
+	if index == -1:
+		favorites_data.add_favorite(favorite)
+		index = favorites_data.favorites.size() - 1
 	
-	var favorite = {
-		"name": entry_name,
-		"type": "folder" if is_directory else "file", 
-		"path": file_path
-	}
-	favorites_data.add_favorite(favorite)
+	# Auto select new_item if added successfully
 	_refresh_tree()
+	_select_item(index)
+
+func add_file_to_favorites(file_path: String):
+	var favorite = favorites_data.create_favorite_from_file(file_path)
+	var index = favorites_data.find_favorite_index(favorite)
+	if index == -1:
+		favorites_data.add_favorite(favorite)
+		index = favorites_data.favorites.size() - 1
+	
+	# Auto select new_item if added successfully
+	_refresh_tree()
+	_select_item(index)
+	
 
 func _on_item_selected():
 	remove_button.disabled = false
@@ -270,21 +272,23 @@ func _on_item_mouse_selected(mouse_pos: Vector2, mouse_button_index: int):
 
 func _show_context_menu(mouse_pos: Vector2):
 	favorites_data.debug_print("Show context menu at mouse_pos: " + str(mouse_pos))
-	var popup_menu = PopupMenu.new()
+	var popup_menu: PopupMenu = PopupMenu.new()
 	add_child(popup_menu)
-	
 	# Add menu items
-	popup_menu.add_item("Remove", 0)
+	popup_menu.add_item("Move Up", 0)
+	popup_menu.add_item("Move Down", 1)
 	popup_menu.add_separator()
-	popup_menu.add_item("Change Color", 1)
-	popup_menu.add_item("Reset Color", 2)
+	popup_menu.add_item("Remove", 2)
+	popup_menu.add_separator()
+	popup_menu.add_item("Change Color", 3)
+	popup_menu.add_item("Reset Color", 4)
 	
 	# Connect menu item selection signal
 	popup_menu.id_pressed.connect(_on_context_menu_selected)
 	
 	# Show menu
 	favorites_data.debug_print("Menu position: " + str(mouse_pos))
-	popup_menu.position =  mouse_pos + global_position + Vector2(popup_menu.size.x, 2 * popup_menu.size.y)
+	popup_menu.position =  mouse_pos + global_position + Vector2(popup_menu.size.x/2, popup_menu.size.y)
 	popup_menu.popup()
 	
 	# Auto-delete menu after closing
@@ -296,11 +300,15 @@ func _on_context_menu_selected(id: int):
 		return
 	
 	match id:
-		0: # Remove favorite
+		0: # Move Up
+			_move_favorite_up()
+		1: # Move Down
+			_move_favorite_down()
+		2: # Remove favorite
 			_on_remove_pressed()
-		1: # Change color
+		3: # Change color
 			_show_color_picker()
-		2: # Reset color
+		4: # Reset color
 			_reset_item_color()
 
 func _navigate_to_favorite(favorite: Dictionary):
@@ -419,10 +427,19 @@ func _on_remove_pressed():
 	if not selected_item:
 		return
 	
-	var favorite = selected_item.get_metadata(0)
-	favorites_data.remove_favorite(favorite)
+	# Get the index of the item being removed
+	var removed_index = _get_item_index(selected_item)
+	remove_favorite(removed_index)	
+
+func remove_favorite(index: int):
+	favorites_data.remove_favorite(index)
 	_refresh_tree()
-	remove_button.disabled = true
+	
+	# Select item at original position, or previous one if not available
+	_select_item(index - 1)
+	
+	# Update remove button state
+	remove_button.disabled = not tree.get_selected() 
 
 func _on_search_text_changed(new_text: String):
 	_refresh_tree()
@@ -449,7 +466,7 @@ func _show_color_picker():
 	
 	# Connect confirmation signal
 	color_picker_dialog.confirmed.connect(func(): _apply_color(color_picker.color))
-	color_picker_dialog.popup_hide.connect(func(): color_picker_dialog.queue_free())
+	color_picker_dialog.canceled.connect(func(): color_picker_dialog.queue_free())
 	
 	color_picker_dialog.popup_centered()
 
@@ -544,3 +561,150 @@ func _switch_to_scene_editor(scene_root: Node):
 		favorites_data.debug_print("Switching to 2D Scene Editor (default)")
 	
 	EditorInterface.set_main_screen_editor(editor_name)
+
+func _move_favorite_up():
+	var selected_item = tree.get_selected()
+	if not selected_item:
+		return
+	
+	var favorite = selected_item.get_metadata(0)
+	if favorites_data.move_favorite_up(favorite):
+		_refresh_tree()
+		# Re-select the moved item
+		_select_favorite_after_refresh(favorite)
+
+func _move_favorite_down():
+	var selected_item = tree.get_selected()
+	if not selected_item:
+		return
+	
+	var favorite = selected_item.get_metadata(0)
+	if favorites_data.move_favorite_down(favorite):
+		_refresh_tree()
+		# Re-select the moved item
+		_select_favorite_after_refresh(favorite)
+
+func _select_favorite_after_refresh(target_favorite: Dictionary):
+	# Find and select the item after refresh
+	var root = tree.get_root()
+	if not root:
+		return
+	
+	var child_count = root.get_child_count()
+	for i in range(child_count):
+		var child = root.get_child(i)
+		var favorite = child.get_metadata(0)
+		if favorites_data._favorites_match(favorite, target_favorite):
+			child.select(0)
+			break
+
+# Drag and drop functionality
+func _get_drag_data(position: Vector2):
+	var item = tree.get_item_at_position(position)
+	if not item:
+		return null
+	
+	var favorite = item.get_metadata(0)
+	if not favorite:
+		return null
+	
+	# Create drag preview
+	var preview = Label.new()
+	preview.text = favorite.name
+	preview.add_theme_color_override("font_color", Color.WHITE)
+	preview.add_theme_color_override("font_shadow_color", Color.BLACK)
+	preview.add_theme_constant_override("shadow_offset_x", 1)
+	preview.add_theme_constant_override("shadow_offset_y", 1)
+	set_drag_preview(preview)
+	
+	# Return drag data
+	return {
+		"type": "favorite_item",
+		"source_item": item,
+		"favorite": favorite,
+		"source_index": _get_item_index(item)
+	}
+
+func _can_drop_data(position: Vector2, data) -> bool:
+	if not data is Dictionary:
+		return false
+	if data.get("type") != "favorite_item":
+		return false
+	
+	var target_item = tree.get_item_at_position(position)
+	if not target_item:
+		return false
+	
+	# Don't allow dropping on the same item
+	if target_item == data.get("source_item"):
+		return false
+	
+	return true
+
+func _drop_data(position: Vector2, data):
+	if not _can_drop_data(position, data):
+		return
+	
+	var target_item = tree.get_item_at_position(position)
+	var source_favorite = data.get("favorite")
+	var target_favorite = target_item.get_metadata(0)
+	
+	var source_index = data.get("source_index")
+	var target_index = _get_item_index(target_item)
+	
+	# Reorder the favorites data
+	_reorder_favorites(source_index, target_index)
+	
+	# Refresh the tree and select the moved item
+	_refresh_tree()
+	_select_favorite_after_refresh(source_favorite)
+
+func _get_item_index(item: TreeItem) -> int:
+	var root = tree.get_root()
+	if not root:
+		return -1
+	
+	var child_count = root.get_child_count()
+	for i in range(child_count):
+		if root.get_child(i) == item:
+			return i
+	return -1
+
+func _reorder_favorites(from_index: int, to_index: int):
+	var favorites = favorites_data.favorites
+	if from_index < 0 or from_index >= favorites.size():
+		return
+	if to_index < 0 or to_index >= favorites.size():
+		return
+	if from_index == to_index:
+		return
+	
+	# Remove the item from its original position
+	var item = favorites[from_index]
+	favorites.remove_at(from_index)
+	
+	# Adjust target index if necessary
+	if from_index < to_index:
+		to_index -= 1
+	
+	# Insert the item at the new position
+	favorites.insert(to_index, item)
+	
+	# Save the reordered favorites
+	favorites_data.save_favorites()
+
+# Selection helper functions
+func _select_item(index: int):
+	var root = tree.get_root()
+	if not root:
+		return
+	
+	var child_count = root.get_child_count()
+	if child_count == 0:
+		return
+	
+	# Select the item at index
+	var item = root.get_child(index)
+	item.select(0)
+	remove_button.disabled = false
+

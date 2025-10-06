@@ -2,9 +2,9 @@
 extends EditorContextMenuPlugin
 
 var favorites_data: FavoritesData
-var favorites_panel
+var favorites_panel: FavoritesPanel
 
-func _init(favorites_data_instance: FavoritesData, favorites_panel_instance):
+func _init(favorites_data_instance: FavoritesData, favorites_panel_instance: FavoritesPanel):
 	favorites_data = favorites_data_instance
 	favorites_panel = favorites_panel_instance
 
@@ -14,62 +14,24 @@ func _popup_menu(paths: PackedStringArray):
 	if selected_nodes.size() > 0:
 		var node = selected_nodes[0]
 		var scene_root = EditorInterface.get_edited_scene_root()
-		
 		if not scene_root or not scene_root.scene_file_path:
 			return
-		
-		# Calculate node path
-		var node_path: String
-		if node == scene_root:
-			node_path = "."
-		else:
-			node_path = str(scene_root.get_path_to(node))
-		
-		# Check if already favorited
-		var is_favorited = false
-		for favorite in favorites_data.get_favorites():
-			if favorite.type == "node" and favorite.path == scene_root.scene_file_path and favorite.node_path == node_path:
-				is_favorited = true
-				break
-		
-		var menu_text = "Remove from Favorites" if is_favorited else "Add to Favorites"
-		add_context_menu_item(menu_text, _on_node_menu_selected)
 
-func _on_node_menu_selected(selected_nodes: Array):
-	# Get the first selected node
-	if selected_nodes.size() > 0:
-		var node = selected_nodes[0]
-		var scene_root = EditorInterface.get_edited_scene_root()
-		
-		if not scene_root or not scene_root.scene_file_path:
-			return
-		
-		# Calculate node path
-		var node_path: String
-		if node == scene_root:
-			node_path = "."
-		else:
-			node_path = str(scene_root.get_path_to(node))
+		# Create favorite from node using unified logic
+		var favorite = favorites_data.create_favorite_from_node(node)
 		
 		# Check if already favorited
-		var is_favorited = false
-		var favorite_to_remove = null
-		for favorite in favorites_data.get_favorites():
-			if favorite.type == "node" and favorite.path == scene_root.scene_file_path and favorite.node_path == node_path:
-				is_favorited = true
-				favorite_to_remove = favorite
-				break
+		var index = favorites_data.find_favorite_index(favorite)
 		
-		if is_favorited:
+		var menu_text = "Remove from Favorites" if index != -1 else "Add to Favorites"
+		add_context_menu_item(menu_text, _on_node_menu_selected.bind(index))
+
+func _on_node_menu_selected(nodes: Array, index: int):
+		if index != -1:
 			# Remove from favorites
-			if favorite_to_remove:
-				favorites_data.remove_favorite(favorite_to_remove)
-				favorites_data.debug_print("Removed node from favorites: " + node.name)
+			favorites_panel.remove_favorite(index)
+			favorites_data.debug_print("Removed node from favorites: " + nodes[0].name)
 		else:
 			# Add to favorites
-			favorites_panel._add_node_to_favorites(node)
-			favorites_data.debug_print("Added node to favorites: " + node.name)
-		
-		# Refresh favorites panel
-		if favorites_panel:
-			favorites_panel._refresh_tree()
+			favorites_panel.add_node_to_favorites(nodes[0])
+			favorites_data.debug_print("Added node to favorites: " + nodes[0].name)
