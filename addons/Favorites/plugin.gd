@@ -1,10 +1,10 @@
 @tool
 extends EditorPlugin
 
-const FavoritesPanel = preload("res://addons/favorites/favorites_panel.gd")
-const FileSystemContextMenuPlugin = preload("res://addons/favorites/file_system_context_menu_plugin.gd")
-const SceneTreeContextMenuPlugin = preload("res://addons/favorites/scene_tree_context_menu_plugin.gd")
-const icon = preload("res://addons/favorites/icon.png")
+const FavoritesPanel = preload("res://addons/Favorites/favorites_panel.gd")
+const FileSystemContextMenuPlugin = preload("res://addons/Favorites/file_system_context_menu_plugin.gd")
+const SceneTreeContextMenuPlugin = preload("res://addons/Favorites/scene_tree_context_menu_plugin.gd")
+const icon = preload("res://addons/Favorites/icon.png")
 
 var favorites_panel_instance
 var filesystem_context_menu_plugin

@@ -2,7 +2,7 @@
 class_name FavoritesPanel
 extends Control
 
-const FavoritesData = preload("res://addons/favorites/favorites_data.gd")
+const FavoritesData = preload("res://addons/Favorites/favorites_data.gd")
 
 const FILE_SYSTEM: StringName = "FileSystem"
 const SCENE: StringName = "Scene"
