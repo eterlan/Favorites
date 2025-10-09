@@ -1,13 +1,18 @@
 # Favorites Plugin for Godot
+![icon](icon.png)
 
-A simple and efficient favorites plugin for Godot Editor that allows you to bookmark scene nodes and files for quick navigation.
+## A simple and efficient favorites plugin for Godot Editor that allows you to bookmark scene nodes and files for quick navigation.
 
 ## Features
-
 - **Bookmark Nodes & Files**: Add scene nodes and project files to your favorites
-- **Smart Detection**: Automatically detects current focus (scene tree or file system)
+- **Customizable Colors**: Set distinct colors by right-click upon item
+- **Reorder**: Easily move items up or down in the list by drag or `CMD / CTRL + ⬆⬇`
 - **Quick Navigation**: Double-click to instantly jump to bookmarked items
+  - **Nodes**: Selects the node in scene tree (opens scene editor if needed)
+  - **Scripts**: Opens in script editor (opens script editor if needed)
+  - **Other files**: Locates in file system
 - **File Type Icons**: Different icons for scripts, scenes, resources, and other file types
+- **Customizable Behaviour**: Configure default action when double-clicking
 - **Search**: Filter favorites with built-in search functionality
 - **Persistent Storage**: Favorites are saved and restored between editor sessions
 
@@ -21,8 +26,8 @@ A simple and efficient favorites plugin for Godot Editor that allows you to book
 
 ### Adding Favorites
 
-- **Nodes**: Select a node in the scene tree → click "Add Current"
-- **Files**: Select files in the file system dock → click "Add Current"
+- **Nodes**: Select a node in the scene tree → click "Add Current" or right-click → "Add to Favorites"
+- **Files**: Select files in the file system dock → click "Add Current" or right-click → "Add to Favorites"
 - **Scripts**: While editing a script → click "Add Current"
 
 ### Navigation
@@ -38,6 +43,7 @@ Double-click any favorite item:
 - **Search**: Use the search box to filter favorites
 - **Remove**: Select item → click "Remove" button
 - **Colors**: Right-click items to set custom colors
+- **Reorder**: Drag and drop or selct an item then press `CMD / CTRL + ⬆⬇`
 
 ## File Types Supported
 
@@ -56,3 +62,13 @@ Favorites are stored in `user://favorites.json` and remain separate between proj
 ## License
 
 This plugin is released under the MIT License.
+
+## Q&A
+- **Q**: How do I reset the favorites list?
+  - **A**: Delete the `user://favorites.json` file
+- **Q**: Can I use this plugin in my commercial projects?
+  - **A**: Yes, you can use it in any project.
+- **Q**: How do I publish plugin like this to the Godot Asset Library?
+  - **A**: Follow the [official tutorial](https://docs.godotengine.org/en/stable/community/asset_library/submitting_to_assetlib.html)
+
+## <a href="https://www.flaticon.com/free-icons/bookmark" title="bookmark icons">Bookmark icons created by Awicon - Flaticon</a>

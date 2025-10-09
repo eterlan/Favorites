@@ -72,7 +72,7 @@ This plugin is released under the MIT License.
   - **A**: Delete the `user://favorites.json` file
 - **Q**: Can I use this plugin in my commercial projects?
   - **A**: Yes, you can use it in any project.
-- **Q**: How do I publish this plugin to the Godot Asset Library?
+- **Q**: How do I publish plugin like this to the Godot Asset Library?
   - **A**: Follow the [official tutorial](https://docs.godotengine.org/en/stable/community/asset_library/submitting_to_assetlib.html)
 
 ## <a href="https://www.flaticon.com/free-icons/bookmark" title="bookmark icons">Bookmark icons created by Awicon - Flaticon</a>
