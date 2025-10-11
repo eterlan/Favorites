@@ -322,34 +322,18 @@ func _navigate_to_favorite(favorite: Dictionary):
 func _navigate_to_node(favorite: Dictionary):
 	var scene_root = EditorInterface.get_edited_scene_root()
 	var target_node = null
-	
-	# First try to find node in current scene
-	if scene_root:
-		if favorite.node_path == ".":
-			# If path is ".", it represents the scene root node
-			target_node = scene_root
-		else:
-			# Use relative path to find node
-			target_node = scene_root.get_node_or_null(favorite.node_path)
 		
-		# If node is found in current scene, navigate directly
-		if target_node:
-			EditorInterface.get_selection().clear()
-			EditorInterface.get_selection().add_node(target_node)
-			favorites_data.debug_print("Navigated to node in current scene: " + favorite.node_path)
-			
-			# Auto-switch to appropriate scene editor if setting is enabled
-			if favorites_data.get_setting("auto_switch_to_scene", false):
-				_switch_to_scene_editor(scene_root)
-			return
-	
 	# Get current scene path
 	var current_scene_path = ""
 	if scene_root:
 		current_scene_path = scene_root.scene_file_path
+	favorites_data.debug_print("Current scene root: " + scene_root.name)
 	
-	# If current scene is not the target scene, open target scene
-	if current_scene_path != favorite.path:
+	# First try to find node in current scene
+	if current_scene_path == favorite.path:
+		# Use relative path to find node
+		target_node = scene_root.get_node_or_null(favorite.node_path)
+	else:
 		favorites_data.debug_print("Opening scene file: " + favorite.path)
 		EditorInterface.open_scene_from_path(favorite.path)
 		
@@ -357,26 +341,24 @@ func _navigate_to_node(favorite: Dictionary):
 		await get_tree().process_frame
 		
 		scene_root = EditorInterface.get_edited_scene_root()
-		if scene_root:
-			if favorite.node_path == ".":
-				target_node = scene_root
-			else:
-				target_node = scene_root.get_node_or_null(favorite.node_path)
-				
-			if target_node:
-				EditorInterface.get_selection().clear()
-				EditorInterface.get_selection().add_node(target_node)
-				favorites_data.debug_print("Navigated to node in newly opened scene: " + favorite.node_path)
-				
-				# Auto-switch to appropriate scene editor if setting is enabled
-				if favorites_data.get_setting("auto_switch_to_scene", false):
-					_switch_to_scene_editor(scene_root)
-			else:
-				favorites_data.debug_print("Node not found in newly opened scene: " + favorite.node_path)
-		else:
+		if not scene_root:
 			favorites_data.debug_print("No scene root found after opening scene")
-	else:
-		favorites_data.debug_print("Node not found: " + favorite.node_path + " (in current scene " + current_scene_path + ")")
+			return
+	if not target_node:
+		favorites_data.debug_print("Node not found in newly opened scene: " + favorite.node_path)
+		return
+	
+	# If node is found in current scene, navigate directly
+
+	EditorInterface.get_selection().clear()
+	EditorInterface.get_selection().add_node(target_node)
+	favorites_data.debug_print("Navigated to node in current scene: " + favorite.node_path)
+	
+	# Auto-switch to appropriate scene editor if setting is enabled
+	if favorites_data.get_setting("auto_switch_to_scene", false):
+		_switch_to_scene_editor(scene_root)
+	return
+	favorites_data.debug_print("Node not found: " + favorite.node_path + " (in current scene " + current_scene_path + ")")
 
 func _navigate_to_file(favorite: Dictionary):
 	# Select file in file system

@@ -84,8 +84,8 @@ func create_favorite_from_node(node: Node) -> Dictionary:
 	var scene_path = scene_root.scene_file_path if scene_root else ""
 	
 	# If node has its own scene file path, use it; otherwise use current edited scene path
-	if node.scene_file_path != "":
-		scene_path = node.scene_file_path
+	# if node.scene_file_path != "":
+	# 	scene_path = node.scene_file_path
 	
 	return {
 		"name": node.name + " (" + scene_path.get_file() + ")",
