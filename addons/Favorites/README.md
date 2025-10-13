@@ -8,11 +8,16 @@
 - **Customizable Colors**: Set distinct colors by right-click upon item
 - **Reorder**: Easily move items up or down in the list by drag or `CMD / CTRL + ⬆⬇`
 - **Quick Navigation**: Double-click to instantly jump to bookmarked items
-  - **Nodes**: Selects the node in scene tree (opens scene editor if needed)
+  - **Nodes**: Selects the node in scene tree (opens scene editor / center in viewport if needed)
   - **Scripts**: Opens in script editor (opens script editor if needed)
   - **Other files**: Locates in file system
+- **Multiple Selections**: Add multiple selections at once.
+- **Various way to add favorites**:
+  - **Context Menu**: Right-click item then select "Add to Favorites"
+  - **Drag and Drop**: Drag item into favorites panel
+  - **Click button**: Select multiple items then click "Add selected"
 - **File Type Icons**: Different icons for scripts, scenes, resources, and other file types
-- **Customizable Behaviour**: Configure default action when double-clicking
+- **Customizable Behaviour**: Configure action after double-clicking favorite item
 - **Search**: Filter favorites with built-in search functionality
 - **Persistent Storage**: Favorites are saved and restored between editor sessions
 
