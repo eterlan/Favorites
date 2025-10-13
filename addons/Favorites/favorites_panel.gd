@@ -34,11 +34,11 @@ func _init() -> void:
 	favorites_data = FavoritesData.new()
 
 func _enter_tree() -> void:
+	# Load favorites data and settings
+	favorites_data.load_favorites()
 	# Create UI
 	_create_ui()
 
-	# Load favorites data and settings
-	favorites_data.load_favorites()
 	file_system_dock = EditorInterface.get_file_system_dock()
 	main_window = file_system_dock.get_window()
 	main_window.gui_focus_changed.connect(_on_main_window_gui_focus_changed)
@@ -47,22 +47,8 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	main_window.gui_focus_changed.disconnect(_on_main_window_gui_focus_changed)
 
-# SceneTreeDock
-func _on_main_window_gui_focus_changed(_control: Control):
-	is_focused_file_system = _control.get_node("../..").name == FILE_SYSTEM
-	if is_focused_file_system:
-		last_focused_editor = FILE_SYSTEM
-		return
-	is_focused_scene_tree_editor = _control.get_node("../..").name == SCENE
-	if is_focused_scene_tree_editor:
-		last_focused_editor = SCENE
-		return
-	is_focused_script_editor = is_instance_of(_control, CodeEdit)
-	if is_focused_script_editor:
-		last_focused_editor = SCRIPT_EDITOR
-		return
-
 func _create_ui():
+	favorites_data.debug_print("Creating UI")
 	# Create vertical layout
 	var vbox = VBoxContainer.new()
 	add_child(vbox)
@@ -112,8 +98,9 @@ func _create_ui():
 	tree.set_hide_root(true)
 	# Enable drag and drop
 	tree.set_drag_forwarding(_get_drag_data, _can_drop_data, _drop_data)
-	tree.item_selected.connect(_on_item_selected)
+	# double click icon doesn't work so use activated instead
 	tree.item_activated.connect(_on_item_activated)
+	# tree.item_icon_double_clicked.connect(_on_item_icon_double_clicked)
 	tree.item_mouse_selected.connect(_on_item_mouse_selected)
 	vbox.add_child(tree)
 	tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -122,6 +109,26 @@ func _create_ui():
 	set_focus_mode(Control.FOCUS_ALL)
 	tree.set_focus_mode(Control.FOCUS_ALL)
 	shortcut_context = tree
+
+	# SceneTreeDock
+func _on_main_window_gui_focus_changed(_control: Control):
+	is_focused_file_system = _control.get_node("../..").name == FILE_SYSTEM
+	if is_focused_file_system:
+		last_focused_editor = FILE_SYSTEM
+		favorites_data.debug_print("Focused File System")
+		return
+		
+	is_focused_scene_tree_editor = _control.get_node("../..").name == SCENE
+	if is_focused_scene_tree_editor:
+		last_focused_editor = SCENE
+		favorites_data.debug_print("Focused Scene Tree Editor")
+		return
+	
+	is_focused_script_editor = is_instance_of(_control, CodeEdit)
+	if is_focused_script_editor:
+		last_focused_editor = SCRIPT_EDITOR
+		favorites_data.debug_print("Focused Script Editor")
+		return
 
 func _input(event: InputEvent):
 	# Handle keyboard shortcuts
@@ -213,13 +220,11 @@ func _on_add_current_pressed():
 				# File system has selected files, prioritize adding these files
 				for path in selected_paths:
 					favorites_data.debug_print("Processing path: " + path)
-					if FileAccess.file_exists(path):  # Ensure it's a file, not a directory
-						add_file_to_favorites(path)
+					add_file_to_favorites(path)
 
 		SCENE:
 			var selection = EditorInterface.get_selection()
 			var selected_nodes = selection.get_selected_nodes()
-			
 			if selected_nodes.size() > 0:
 				# Add selected nodes
 				for node in selected_nodes:
@@ -252,7 +257,6 @@ func add_file_to_favorites(file_path: String):
 	# Auto select new_item if added successfully
 	_refresh_tree()
 	_select_item(index)
-	
 
 func _on_item_selected():
 	remove_button.disabled = false
@@ -329,36 +333,40 @@ func _navigate_to_node(favorite: Dictionary):
 		current_scene_path = scene_root.scene_file_path
 	favorites_data.debug_print("Current scene root: " + scene_root.name)
 	
-	# First try to find node in current scene
-	if current_scene_path == favorite.path:
-		# Use relative path to find node
-		target_node = scene_root.get_node_or_null(favorite.node_path)
-	else:
+	# Check if scene needs to be opened
+	if current_scene_path != favorite.path:
 		favorites_data.debug_print("Opening scene file: " + favorite.path)
 		EditorInterface.open_scene_from_path(favorite.path)
-		
 		# Wait for scene to load then select node
 		await get_tree().process_frame
-		
-		scene_root = EditorInterface.get_edited_scene_root()
-		if not scene_root:
-			favorites_data.debug_print("No scene root found after opening scene")
-			return
+		scene_root = EditorInterface.get_edited_scene_root()	
+
+	if not scene_root:
+		favorites_data.debug_print("No scene root found after opening scene")
+		return
+
+	# Use relative path to find node
+	target_node = scene_root.get_node_or_null(favorite.node_path)
 	if not target_node:
 		favorites_data.debug_print("Node not found in newly opened scene: " + favorite.node_path)
 		return
 	
-	# If node is found in current scene, navigate directly
-
 	EditorInterface.get_selection().clear()
 	EditorInterface.get_selection().add_node(target_node)
+	
 	favorites_data.debug_print("Navigated to node in current scene: " + favorite.node_path)
 	
 	# Auto-switch to appropriate scene editor if setting is enabled
-	if favorites_data.get_setting("auto_switch_to_scene", false):
+	if favorites_data.get_setting(FavoritesData.SETTING_AUTO_SWITCH_TO_SCENE, false):
 		_switch_to_scene_editor(scene_root)
-	return
-	favorites_data.debug_print("Node not found: " + favorite.node_path + " (in current scene " + current_scene_path + ")")
+	
+	# Auto-center node in viewport if setting is enabled
+	if favorites_data.get_setting(FavoritesData.SETTING_AUTO_CENTER_NODE_IN_VIEWPORT, false):
+		EditorInterface.get_editor_viewport_2d().get_parent().grab_focus()
+		var key_ev := InputEventKey.new()
+		key_ev.keycode = KEY_F
+		key_ev.pressed = true
+		Input.parse_input_event(key_ev)
 
 func _navigate_to_file(favorite: Dictionary):
 	# Select file in file system
@@ -372,12 +380,14 @@ func _navigate_to_file(favorite: Dictionary):
 			# Script files: open in script editor
 			var script = load(favorite.path)
 			if script:
-				EditorInterface.edit_script(script)
-				favorites_data.debug_print("Opened in script editor: " + favorite.name)
-				
 				# Auto-switch to script editor if setting is enabled
-				if favorites_data.get_setting("auto_switch_to_script", false):
-					EditorInterface.set_main_screen_editor("Script")
+				if favorites_data.get_setting(FavoritesData.SETTING_AUTO_SWITCH_TO_SCRIPT, false):
+					var use_external_editor = EditorInterface.get_editor_settings().get_setting("text_editor/external/use_external_editor")
+					print("use_external_editor: " + str(use_external_editor))
+					if not use_external_editor:
+						EditorInterface.set_main_screen_editor("Script")
+					EditorInterface.edit_script(script)
+					favorites_data.debug_print("Opened in script editor: " + favorite.name)
 			else:
 				favorites_data.debug_print("Failed to load script: " + favorite.path)
 		
@@ -494,18 +504,23 @@ func _create_settings_popup():
 	
 	# Add toggle option for auto-switching to script editor
 	settings_popup.add_check_item("Auto-switch to Script Editor")
-	settings_popup.set_item_checked(0, favorites_data.get_setting("auto_switch_to_script", false))
+	settings_popup.set_item_checked(0, favorites_data.get_setting(FavoritesData.SETTING_AUTO_SWITCH_TO_SCRIPT, false))
 	settings_popup.set_item_tooltip(0, "Automatically switch to Script Editor when opening script files")
 	
 	# Add toggle option for auto-switching to scene editor
 	settings_popup.add_check_item("Auto-switch to Scene Editor")
-	settings_popup.set_item_checked(1, favorites_data.get_setting("auto_switch_to_scene", false))
+	settings_popup.set_item_checked(1, favorites_data.get_setting(FavoritesData.SETTING_AUTO_SWITCH_TO_SCENE, false))
 	settings_popup.set_item_tooltip(1, "Automatically switch to Scene Editor when selecting scene nodes")
+	
+	# Add toggle option for auto-centering node in viewport
+	settings_popup.add_check_item("Auto-center Node in Viewport")
+	settings_popup.set_item_checked(2, favorites_data.get_setting(FavoritesData.SETTING_AUTO_CENTER_NODE_IN_VIEWPORT, true))
+	settings_popup.set_item_tooltip(2, "Automatically center the selected node in the viewport")
 	
 	# Add debug toggle
 	settings_popup.add_check_item("Enable Debug Output")
-	settings_popup.set_item_checked(2, favorites_data.get_setting("debug_enabled", true))
-	settings_popup.set_item_tooltip(2, "Enable debug output in console")
+	settings_popup.set_item_checked(3, favorites_data.get_setting(FavoritesData.SETTING_DEBUG_ENABLED, true))
+	settings_popup.set_item_tooltip(3, "Enable debug output in console")
 	
 	# Connect signal
 	settings_popup.id_pressed.connect(_on_settings_item_selected)
@@ -513,17 +528,21 @@ func _create_settings_popup():
 func _on_settings_item_selected(id: int):
 	match id:
 		0: # Auto-switch to Script Editor
-			var new_value = !favorites_data.get_setting("auto_switch_to_script", false)
-			favorites_data.set_setting("auto_switch_to_script", new_value)
+			var new_value = !favorites_data.get_setting(FavoritesData.SETTING_AUTO_SWITCH_TO_SCRIPT, false)
+			favorites_data.set_setting(FavoritesData.SETTING_AUTO_SWITCH_TO_SCRIPT, new_value)
 			settings_popup.set_item_checked(0, new_value)
 		1: # Auto-switch to Scene Editor
-			var new_value = !favorites_data.get_setting("auto_switch_to_scene", false)
-			favorites_data.set_setting("auto_switch_to_scene", new_value)
+			var new_value = !favorites_data.get_setting(FavoritesData.SETTING_AUTO_SWITCH_TO_SCENE, false)
+			favorites_data.set_setting(FavoritesData.SETTING_AUTO_SWITCH_TO_SCENE, new_value)
 			settings_popup.set_item_checked(1, new_value)
-		2: # Enable Debug Output
-			var new_value = !favorites_data.get_setting("debug_enabled", true)
-			favorites_data.set_setting("debug_enabled", new_value)
+		2: # Auto-center Node in Viewport
+			var new_value = !favorites_data.get_setting(FavoritesData.SETTING_AUTO_CENTER_NODE_IN_VIEWPORT, true)
+			favorites_data.set_setting(FavoritesData.SETTING_AUTO_CENTER_NODE_IN_VIEWPORT, new_value)
 			settings_popup.set_item_checked(2, new_value)
+		3: # Enable Debug Output
+			var new_value = !favorites_data.get_setting(FavoritesData.SETTING_DEBUG_ENABLED, true)
+			favorites_data.set_setting(FavoritesData.SETTING_DEBUG_ENABLED, new_value)
+			settings_popup.set_item_checked(3, new_value)
 
 func _switch_to_scene_editor(scene_root: Node):
 	if not scene_root:
@@ -610,36 +629,46 @@ func _get_drag_data(position: Vector2):
 func _can_drop_data(position: Vector2, data) -> bool:
 	if not data is Dictionary:
 		return false
-	if data.get("type") != "favorite_item":
-		return false
+
+	if data.get("type") == "favorite_item":	
+		var target_item = tree.get_item_at_position(position)
+		if not target_item:
+			return false
+		
+		# Don't allow dropping on the same item
+		if target_item == data.get("source_item"):
+			return false
+		
+		return true
+
+	elif data.get("type") == "nodes" or "files" or "script_list_element":
+		return true
 	
-	var target_item = tree.get_item_at_position(position)
-	if not target_item:
-		return false
-	
-	# Don't allow dropping on the same item
-	if target_item == data.get("source_item"):
-		return false
-	
-	return true
+	return false
 
 func _drop_data(position: Vector2, data):
 	if not _can_drop_data(position, data):
 		return
-	
-	var target_item = tree.get_item_at_position(position)
-	var source_favorite = data.get("favorite")
-	var target_favorite = target_item.get_metadata(0)
-	
-	var source_index = data.get("source_index")
-	var target_index = _get_item_index(target_item)
-	
-	# Reorder the favorites data
-	_reorder_favorites(source_index, target_index)
-	
-	# Refresh the tree and select the moved item
-	_refresh_tree()
-	_select_favorite_after_refresh(source_favorite)
+
+	var data_is_favorite_item = data.get("type") == "favorite_item"
+	var selected_favorite: Dictionary
+		
+	if data_is_favorite_item:
+		var target_item = tree.get_item_at_position(position)
+		selected_favorite = data.get("favorite")
+		var target_favorite = target_item.get_metadata(0)
+		
+		var source_index = data.get("source_index")
+		var target_index = _get_item_index(target_item)
+		
+		# Reorder the favorites data
+		_reorder_favorites(source_index, target_index)
+			# Refresh the tree and select the moved item
+		_refresh_tree()
+		_select_favorite_after_refresh(selected_favorite)
+
+	else:
+		_on_add_current_pressed()
 
 func _get_item_index(item: TreeItem) -> int:
 	var root = tree.get_root()

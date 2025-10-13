@@ -4,23 +4,24 @@ class_name FavoritesData
 
 const FAVORITES_FILE = "user://favorites.json"
 
+const SETTING_AUTO_SWITCH_TO_SCRIPT: StringName = "auto_switch_to_script"
+const SETTING_AUTO_SWITCH_TO_SCENE: StringName = "auto_switch_to_scene"
+const SETTING_AUTO_CENTER_NODE_IN_VIEWPORT: StringName = "auto_center_node_in_viewport"
+const SETTING_DEBUG_ENABLED: StringName = "debug_enabled"
+
 var favorites: Array = []
-var debug_enabled: bool = true
 var settings: Dictionary = {
-	"auto_switch_to_script": false,
-	"auto_switch_to_scene": false,
-	"debug_enabled": true
+	FavoritesData.SETTING_AUTO_SWITCH_TO_SCRIPT: true,
+	FavoritesData.SETTING_AUTO_SWITCH_TO_SCENE: true,
+	FavoritesData.SETTING_AUTO_CENTER_NODE_IN_VIEWPORT: true,
+	FavoritesData.SETTING_DEBUG_ENABLED: false
 }
 
 # Debug print method - only prints when debug is enabled
 func debug_print(message: String):
-	if debug_enabled:
-		print("[Favorites Debug] ", message)
-
-# Enable/disable debug mode
-func set_debug_enabled(enabled: bool):
-	debug_enabled = enabled
-	debug_print("Debug mode " + ("enabled" if enabled else "disabled"))
+	if settings.get(FavoritesData.SETTING_DEBUG_ENABLED, false):
+		var time_str = Time.get_time_string_from_system()
+		print("[Favorites Debug] ", time_str, " ", message)
 
 func add_favorite(favorite: Dictionary) -> bool:
 	# Check if the same favorite item already exists
@@ -83,10 +84,6 @@ func create_favorite_from_node(node: Node) -> Dictionary:
 	var scene_root = EditorInterface.get_edited_scene_root()
 	var scene_path = scene_root.scene_file_path if scene_root else ""
 	
-	# If node has its own scene file path, use it; otherwise use current edited scene path
-	# if node.scene_file_path != "":
-	# 	scene_path = node.scene_file_path
-	
 	return {
 		"name": node.name + " (" + scene_path.get_file() + ")",
 		"type": "node",
@@ -147,9 +144,6 @@ func get_setting(key: String, default_value = null):
 
 func set_setting(key: String, value):
 	settings[key] = value
-	# Update debug_enabled if it's changed
-	if key == "debug_enabled":
-		debug_enabled = value
 	save_favorites()
 
 func save_favorites():
@@ -194,8 +188,6 @@ func load_favorites():
 				for key in settings.keys():
 					if loaded_settings.has(key):
 						settings[key] = loaded_settings[key]
-				# Update debug_enabled from settings
-				debug_enabled = settings.get("debug_enabled", true)
 				debug_print("Loaded favorites data, " + str(favorites.size()) + " items and settings")
 			else:
 				debug_print("Invalid data format")
