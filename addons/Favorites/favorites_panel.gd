@@ -17,9 +17,6 @@ var settings_popup: PopupMenu
 var search_line_edit: LineEdit
 var all_favorites: Array = []
 
-var is_focused_file_system: bool = false
-var is_focused_scene_tree_editor: bool = false
-var is_focused_script_editor: bool = false
 var last_focused_editor: String = ""
 
 var file_system_dock: FileSystemDock
@@ -112,23 +109,18 @@ func _create_ui():
 
 	# SceneTreeDock
 func _on_main_window_gui_focus_changed(_control: Control):
-	is_focused_file_system = _control.get_node("../..").name == FILE_SYSTEM
-	if is_focused_file_system:
+	var last_focused_control = _control.get_path().get_concatenated_names() 
+	if last_focused_control.contains(FILE_SYSTEM):
 		last_focused_editor = FILE_SYSTEM
 		favorites_data.debug_print("Focused File System")
-		return
-		
-	is_focused_scene_tree_editor = _control.get_node("../..").name == SCENE
-	if is_focused_scene_tree_editor:
+	elif last_focused_control.contains(SCENE):
 		last_focused_editor = SCENE
 		favorites_data.debug_print("Focused Scene Tree Editor")
-		return
-	
-	is_focused_script_editor = is_instance_of(_control, CodeEdit)
-	if is_focused_script_editor:
+	elif last_focused_control.contains(SCRIPT_EDITOR):
 		last_focused_editor = SCRIPT_EDITOR
 		favorites_data.debug_print("Focused Script Editor")
-		return
+	else:
+		favorites_data.debug_print("Focused unknown control: " + last_focused_control)
 
 func _input(event: InputEvent):
 	# Handle keyboard shortcuts
@@ -211,7 +203,6 @@ func _set_file_icon(item: TreeItem, file_path: String):
 
 func _on_add_current_pressed():
 	# First check if file system window has selected files
-
 	match last_focused_editor:
 		FILE_SYSTEM:
 			var selected_paths = EditorInterface.get_selected_paths()
@@ -234,7 +225,8 @@ func _on_add_current_pressed():
 			var current_script = EditorInterface.get_script_editor().get_current_script()
 			if current_script:
 				add_file_to_favorites(current_script.resource_path)
-
+		_:
+			favorites_data.debug_print("last_focused_editor is invalid")
 
 func add_node_to_favorites(node: Node):
 	var favorite = favorites_data.create_favorite_from_node(node)
@@ -649,7 +641,6 @@ func _can_drop_data(position: Vector2, data) -> bool:
 func _drop_data(position: Vector2, data):
 	if not _can_drop_data(position, data):
 		return
-
 	var data_is_favorite_item = data.get("type") == "favorite_item"
 	var selected_favorite: Dictionary
 		
